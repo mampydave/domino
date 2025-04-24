@@ -1,0 +1,26 @@
+ecran d'accueil avec un animaton attractive
+
+ecran de liste de joueur:
+    bouton pour ajouter nouveau joueur
+    regle pour la liste:
+        mettre en checkbox
+        3 joueur maximum
+        required
+    bouton commencer la partie 
+
+ecran d'ajout de score:
+    tour de joueur :
+        puisque la selection est un suite ex pour joueur A , B ,C selectionner en premier joueur A sera dans le tableau de tour quand un score ajouter ou bouton null le tour change et donc joueur B et ainsi de suite apres B c'est C puis retour a A
+    mis en valeur des joueurs selectionner pour la partie avec leur score respectif
+    input d'ajout de score
+    bouton pour chaque joueurs pour ajouter leurs scores et un pour null (donc n'ajouter aucun score mais change de tour de joueur )
+
+ecran pour une calculatrice 
+       
+ecran dashboard :
+    fond(idfond,amount)
+    player(idplayer,nom)
+    gagnant(idgagnant,idplayer,date,idfond)
+    perte(idperte,idplayer,date,idfond)
+
+    moyen pour entrer fond (a sauvegarder dans la base si il y a deja update sinon add)

@@ -61,10 +61,16 @@ model.fit(
 )
 
 # Sauvegarder le modèle
-model.save('pip_model.keras')
+# model.save('pip_model.h5')
+# Sauvegarder en format moderne TensorFlow SavedModel
+model.export('my_saved_model')   # <-- remplace model.save()
+
+# Conversion en TensorFlow.js via terminal (hors Python)
+# Ouvre un terminal et tape :
+# tensorflowjs_converter --input_format=tf_saved_model --output_format=tfjs_graph_model ./my_saved_model ./tfjs_pip_model
 
 # Convertir en TensorFlow.js
-import tensorflowjs as tfjs
-tfjs.converters.save_keras_model(model, 'tfjs_pip_model')
+# import tensorflowjs as tfjs
+# tfjs.converters.save_keras_model(model, 'tfjs_pip_model')
 
 print("Modèle entraîné et converti en tfjs_pip_model/model.json")
