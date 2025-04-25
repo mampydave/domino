@@ -1,4 +1,3 @@
-// Définition complète de votre schéma de base de données
 export const SCHEMA = {
     tables: [
       {
@@ -45,5 +44,5 @@ export const SCHEMA = {
     ]
   };
   
-  // Version du schéma pour les migrations futures
+
   export const SCHEMA_VERSION = 1;

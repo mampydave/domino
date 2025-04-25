@@ -128,6 +128,28 @@ const DashboardScreen = ({ route, navigation }) => {
     }
   };
 
+  const resetAllData = async () => {
+    Alert.alert(
+      'Confirmation',
+      'Voulez-vous vraiment réinitialiser toutes les données ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Oui',
+          onPress: async () => {
+            try {
+              await GameRepository.resetAllData();
+              
+            } catch (error) {
+              console.error('Erreur lors de la réinitialisation :', error);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   if (!isAuthenticated) {
     return (
       <View style={styles.container}>
@@ -296,6 +318,11 @@ const DashboardScreen = ({ route, navigation }) => {
         >
           <Text style={styles.actionButtonText}>Retour</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.resetButton} onPress={resetAllData}>
+          <Text style={styles.resetText}>Réinitialiser toutes les données</Text>
+        </TouchableOpacity>
+
       </ScrollView>
 
       <Modal

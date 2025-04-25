@@ -211,6 +211,26 @@ async getGlobalStats() {
       throw error;
     }
   }
+
+  async resetAllData() {
+    try {
+      await this.db.db.transaction(async (tx) => {
+        await tx.executeSql('DELETE FROM player');
+        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'player'");
+        await tx.executeSql('DELETE FROM fond');
+        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'fond'");
+        await tx.executeSql('DELETE FROM gagnant');
+        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'gagnant'");
+        await tx.executeSql('DELETE FROM perte');
+        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'perte'");
+      });
+      console.log('Toutes les données ont été réinitialisées.');
+    } catch (error) {
+      console.error('Erreur lors de la réinitialisation des données :', error);
+      throw error;
+    }
+  }
+
 }
 
 export default new GameRepository();
