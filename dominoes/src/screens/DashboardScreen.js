@@ -320,7 +320,7 @@ const DashboardScreen = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.resetButton} onPress={resetAllData}>
-          <Text style={styles.resetText}>Réinitialiser toutes les données</Text>
+          <Text style={styles.resetText}>Reinitialiser toutes les donnees</Text>
         </TouchableOpacity>
 
       </ScrollView>
