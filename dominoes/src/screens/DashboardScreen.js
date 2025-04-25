@@ -642,6 +642,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  resetButton: {
+    alignSelf: 'center',
+    backgroundColor: 'red',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 10,
+  },
+  resetText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
 });
 
 export default DashboardScreen;
