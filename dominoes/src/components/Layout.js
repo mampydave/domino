@@ -11,7 +11,7 @@ export default function Layout({ children, footerProps, sidebarProps }) {
         {children}
       </View>
       
-      <Footer {...footerProps} />
+      {/* <Footer {...footerProps} /> */}
     </View>
   );
 }
@@ -23,6 +23,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingBottom: 70 // Pour éviter le chevauchement avec le footer
+    paddingBottom: 70 
   }
 });
