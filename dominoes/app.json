@@ -1,7 +1,11 @@
 {
   "expo": {
-    "name": "dominoes",
-    "slug": "dominoes",
+    "name": "Dom",
+    "permissions": [
+      "camera"
+    ],
+    "slug": "dom",
+    "plugins": ["react-native-vision-camera"],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,22 +17,22 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application utilise la caméra pour détecter les dominos."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.dominoes"
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.CAMERA"],
+      "package": "com.anonymous.dom"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "97c86fd0-abcd-430f-8ec0-8132734cb107"
-      }
     }
   }
 }

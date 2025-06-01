@@ -11,47 +11,31 @@ class GameRepository {
 
   async createFund(amount) {
     try {
-      let result;
-      await this.db.db.transaction(async (tx) => {
-        result = await tx.executeSql(
-          'INSERT INTO fond (amount) VALUES (?)',
-          [amount]
-        );
-      });
-      return result.insertId;
+      const db = await this.db.dbPromise;
+      const result = await db.runAsync('INSERT INTO fond (amount) VALUES (?)', [amount]);
+      return result.lastInsertRowId;
     } catch (error) {
       console.error('Erreur création fond:', error);
       throw error;
     }
   }
 
-
-    async getLastFund() {
-        try {
-        let fund = null;
-        await this.db.transaction(async (tx) => {
-            const result = await tx.executeSql(
-            'SELECT * FROM fond ORDER BY idfond DESC LIMIT 1'
-            );
-            if (result.rows.length > 0) {
-                fund = result.rows.item(0);
-            }
-        });
-        return fund;
-        } catch (error) {
-        console.error('Erreur récupération dernier fond:', error);
-        throw error;
-        }
-   }
-  
-   async addWinner(playerId, date, fundId) {
+  async getLastFund() {
     try {
-      await this.db.db.transaction(async (tx) => {
-        await tx.executeSql(
-          'INSERT INTO gagnant (idplayer, date, fond) VALUES (?, ?, ?)',
-          [playerId, date, fundId]
-        );
-      });
+      const db = await this.db.dbPromise;
+      const result = await db.getFirstAsync('SELECT * FROM fond ORDER BY idfond DESC LIMIT 1');
+      return result;
+    } catch (error) {
+      console.error('Erreur récupération dernier fond:', error);
+      throw error;
+    }
+  }
+  
+  async addWinner(playerId, date, fundId) {
+    try {
+      const db = await this.db.dbPromise;
+      await db.runAsync('INSERT INTO gagnant (idplayer, date, fond) VALUES (?, ?, ?)', 
+        [playerId, date, fundId]);
       return true;
     } catch (error) {
       console.error('Erreur ajout gagnant:', error);
@@ -61,150 +45,136 @@ class GameRepository {
 
   async addLosers(losersIds, date, fundId) {
     try {
-      await this.db.db.transaction(async (tx) => {
+      const db = await this.db.dbPromise;
+      await db.execAsync('BEGIN TRANSACTION');
+      
+      try {
         for (const playerId of losersIds) {
-          await tx.executeSql(
-            'INSERT INTO perte (idplayer, date, fond) VALUES (?, ?, ?)',
-            [playerId, date, fundId]
-          );
+          await db.runAsync('INSERT INTO perte (idplayer, date, fond) VALUES (?, ?, ?)', 
+            [playerId, date, fundId]);
         }
-      });
-      return true;
+        await db.execAsync('COMMIT');
+        return true;
+      } catch (error) {
+        await db.execAsync('ROLLBACK');
+        throw error;
+      }
     } catch (error) {
       console.error('Erreur ajout perdants:', error);
       throw error;
     }
   }
 
-
-async getTopPlayersByWins() {
-  try {
-    let players = [];
-    await this.db.transaction(async (tx) => {
-      const result = await tx.executeSql(`
+  async getTopPlayersByWins() {
+    try {
+      const db = await this.db.dbPromise;
+      
+      console.log('gagnant',await db.getAllAsync('SELECT * FROM gagnant'));
+            console.log('perdant',await db.getAllAsync('SELECT * FROM perte'));
+      // console.log('player',await db.getAllAsync('SELECT * FROM player LIMIT 5'));
+      const result = await db.getAllAsync(`
         SELECT p.idplayer, p.name, 
                COUNT(g.idgagnant) as totalWins, 
-               SUM(g.fond) as totalAmount
+               SUM(g.fond) as totalAmount,g.date as date
         FROM player p
         JOIN gagnant g ON p.idplayer = g.idplayer
         GROUP BY p.idplayer
         ORDER BY totalAmount DESC
         LIMIT 5
       `);
-      for (let i = 0; i < result.rows.length; i++) {
-        players.push(result.rows.item(i));
-      }
-    });
-    return players;
-  } catch (error) {
-    console.error('Error getting top players:', error);
-    return [];
+      return result;
+    } catch (error) {
+      console.error('Error getting top players:', error);
+      return [];
+    }
   }
-}
 
-async getWorstPlayersByLosses() {
-  try {
-    let players = [];
-    await this.db.transaction(async (tx) => {
-      const result = await tx.executeSql(`
+  async getWorstPlayersByLosses() {
+    try {
+      const db = await this.db.dbPromise;
+      const result = await db.getAllAsync(`
         SELECT p.idplayer, p.name, 
                COUNT(pe.idperte) as totalLosses, 
-               SUM(pe.fond) as totalAmount
+               SUM(pe.fond) as totalAmount,pe.date as date
         FROM player p
         JOIN perte pe ON p.idplayer = pe.idplayer
         GROUP BY p.idplayer
         ORDER BY totalAmount DESC
         LIMIT 5
       `);
-      for (let i = 0; i < result.rows.length; i++) {
-        players.push(result.rows.item(i));
-      }
-    });
-    return players;
-  } catch (error) {
-    console.error('Error getting worst players:', error);
-    return [];
+      return result;
+    } catch (error) {
+      console.error('Error getting worst players:', error);
+      return [];
+    }
   }
-}
 
-async getTotalFunds() {
-  try {
-    let total = 0;
-    await this.db.transaction(async (tx) => {
-      const result = await tx.executeSql('SELECT SUM(amount) as total FROM fond');
-      if (result.rows.length > 0) {
-        total = result.rows.item(0).total || 0;
-      }
-    });
-    return total;
-  } catch (error) {
-    console.error('Error getting total funds:', error);
-    return 0;
+  async getTotalFunds() {
+    try {
+      const db = await this.db.dbPromise;
+      const result = await db.getFirstAsync('SELECT SUM(amount) as total FROM fond');
+      return result?.total || 0;
+    } catch (error) {
+      console.error('Error getting total funds:', error);
+      return 0;
+    }
   }
-}
 
-async getGlobalStats() {
-  try {
-    const stats = {
-      totalWins: 0,
-      totalLosses: 0,
-      avgWinAmount: 0,
-      avgLossAmount: 0
-    };
-    
-    await this.db.transaction(async (tx) => {
-      // Nombre total de victoires
-      const wins = await tx.executeSql('SELECT COUNT(*) as count FROM gagnant');
-      stats.totalWins = wins.rows.item(0).count;
+  async getGlobalStats() {
+    try {
+      const db = await this.db.dbPromise;
+      const stats = {};
       
-      // Nombre total de pertes
-      const losses = await tx.executeSql('SELECT COUNT(*) as count FROM perte');
-      stats.totalLosses = losses.rows.item(0).count;
+      // Exécution en parallèle pour meilleure performance
+      const [wins, losses, avgWin, avgLoss] = await Promise.all([
+        db.getFirstAsync('SELECT COUNT(*) as count FROM gagnant'),
+        db.getFirstAsync('SELECT COUNT(*) as count FROM perte'),
+        db.getFirstAsync('SELECT AVG(fond) as avg FROM gagnant'),
+        db.getFirstAsync('SELECT AVG(fond) as avg FROM perte')
+      ]);
       
-      // Moyenne des gains
-      const avgWin = await tx.executeSql('SELECT AVG(fond) as avg FROM gagnant');
-      stats.avgWinAmount = avgWin.rows.item(0).avg;
-      
-      // Moyenne des pertes
-      const avgLoss = await tx.executeSql('SELECT AVG(fond) as avg FROM perte');
-      stats.avgLossAmount = avgLoss.rows.item(0).avg;
-    });
-    
-    return stats;
-  } catch (error) {
-    console.error('Error getting global stats:', error);
-    return stats;
+      return {
+        totalWins: wins?.count || 0,
+        totalLosses: losses?.count || 0,
+        avgWinAmount: avgWin?.avg || 0,
+        avgLossAmount: avgLoss?.avg || 0
+      };
+    } catch (error) {
+      console.error('Error getting global stats:', error);
+      return {
+        totalWins: 0,
+        totalLosses: 0,
+        avgWinAmount: 0,
+        avgLossAmount: 0
+      };
+    }
   }
-}
-
   
   async getGameHistory() {
     try {
-      let history = [];
-      await this.db.db.transaction(async (tx) => {
-        const funds = await tx.executeSql('SELECT * FROM fond ORDER BY idfond DESC');
+      const db = await this.db.dbPromise;
+      const funds = await db.getAllAsync('SELECT * FROM fond ORDER BY idfond DESC');
+      
+      const history = await Promise.all(funds.map(async fund => {
+        const [winner, losers] = await Promise.all([
+          db.getFirstAsync(`
+            SELECT p.* FROM gagnant g 
+            JOIN player p ON g.idplayer = p.idplayer 
+            WHERE g.idfond = ?`, [fund.idfond]),
+          db.getAllAsync(`
+            SELECT p.* FROM perte pe 
+            JOIN player p ON pe.idplayer = p.idplayer 
+            WHERE pe.idfond = ?`, [fund.idfond])
+        ]);
         
-        for (let i = 0; i < funds.rows.length; i++) {
-          const fund = funds.rows.item(i);
-          
-          const winner = await tx.executeSql(
-            'SELECT p.* FROM gagnant g JOIN player p ON g.idplayer = p.idplayer WHERE g.idfond = ?',
-            [fund.idfond]
-          );
-          
-          const losers = await tx.executeSql(
-            'SELECT p.* FROM perte pe JOIN player p ON pe.idplayer = p.idplayer WHERE pe.idfond = ?',
-            [fund.idfond]
-          );
-          
-          history.push({
-            fund,
-            winner: winner.rows.item(0),
-            losers: losers.rows._array,
-            date: fund.date
-          });
-        }
-      });
+        return {
+          fund,
+          winner,
+          losers,
+          date: fund.date
+        };
+      }));
+      
       return history;
     } catch (error) {
       console.error('Erreur récupération historique:', error);
@@ -212,25 +182,74 @@ async getGlobalStats() {
     }
   }
 
+    async fetchAllWinsData() {
+      try {
+        const db = await this.db.dbPromise;
+        return await db.getAllAsync(`
+          SELECT 
+            g.idgagnant as id,
+            g.idplayer,
+            p.name,
+            g.fond as amount,
+            g.date,
+            'win' as type
+          FROM gagnant g
+          LEFT JOIN player p ON g.idplayer = p.idplayer
+          ORDER BY g.date DESC
+        `);
+      } catch (error) {
+        console.error('Error fetching raw win transactions:', error);
+        return [];
+      }
+    }
+
+  async fetchAllLossesData() {
+    try {
+      const db = await this.db.dbPromise;
+      return await db.getAllAsync(`
+        SELECT 
+          pe.idperte as id,
+          pe.idplayer,
+          p.name,
+          pe.fond as amount,
+          pe.date,
+          'loss' as type
+        FROM perte pe
+        LEFT JOIN player p ON pe.idplayer = p.idplayer
+        ORDER BY pe.date DESC
+      `);
+    } catch (error) {
+      console.error('Error fetching raw loss transactions:', error);
+      return [];
+    }
+  }
+
   async resetAllData() {
     try {
-      await this.db.db.transaction(async (tx) => {
-        await tx.executeSql('DELETE FROM player');
-        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'player'");
-        await tx.executeSql('DELETE FROM fond');
-        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'fond'");
-        await tx.executeSql('DELETE FROM gagnant');
-        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'gagnant'");
-        await tx.executeSql('DELETE FROM perte');
-        await tx.executeSql("DELETE FROM sqlite_sequence WHERE name = 'perte'");
-      });
-      console.log('Toutes les données ont été réinitialisées.');
+      const db = await this.db.dbPromise;
+      await db.execAsync('BEGIN TRANSACTION');
+      
+      try {
+        await db.runAsync('DELETE FROM player');
+        await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'player'");
+        await db.runAsync('DELETE FROM fond');
+        await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'fond'");
+        await db.runAsync('DELETE FROM gagnant');
+        await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'gagnant'");
+        await db.runAsync('DELETE FROM perte');
+        await db.runAsync("DELETE FROM sqlite_sequence WHERE name = 'perte'");
+        
+        await db.execAsync('COMMIT');
+        console.log('Toutes les données ont été réinitialisées.');
+      } catch (error) {
+        await db.execAsync('ROLLBACK');
+        throw error;
+      }
     } catch (error) {
       console.error('Erreur lors de la réinitialisation des données :', error);
       throw error;
     }
   }
-
 }
 
 export default new GameRepository();

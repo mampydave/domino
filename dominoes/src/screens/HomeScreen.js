@@ -22,7 +22,7 @@ export default function HomeScreen({ route, navigation }) {
   const { players } = route.params;
   const confettiRef = useRef(null);
   
-  // États du jeu
+
   const [playerList, setPlayerList] = useState(
     players.map(player => ({
       ...player,
@@ -102,7 +102,7 @@ export default function HomeScreen({ route, navigation }) {
       const maxScore = Math.max(...allScores);
       const minScore = Math.min(...allScores);
       const winner = playerList.find(p => p.score === maxScore);
-      const losers = playerList.filter(p => p.id !== winner?.id).map(p => p.id);
+      const losers = playerList.filter(p => p.idplayer !== winner?.idplayer).map(p => p.idplayer);
       let fundId = 1; 
 
       try {
@@ -120,10 +120,10 @@ export default function HomeScreen({ route, navigation }) {
         if (achiever) {
           // Enregistrement dans la base de données
           try {
-            const fundId = await GameRepository.createFund(achiever.score);
+            // const fundId = await GameRepository.getLastFund();
             const currentDate = new Date().toISOString();
             
-            await GameRepository.addWinner(achiever.id, currentDate, fundId);
+            await GameRepository.addWinner(achiever.idplayer, currentDate, fundId);
             await GameRepository.addLosers(losers, currentDate, fundId);
           } catch (error) {
             console.error("Erreur lors de l'enregistrement", error);
@@ -146,7 +146,7 @@ export default function HomeScreen({ route, navigation }) {
           // const fundId = await GameRepository.createFund(winner.score);
           const currentDate = new Date().toISOString();
           
-          await GameRepository.addWinner(winner.id, currentDate, fundId);
+          await GameRepository.addWinner(winner.idplayer, currentDate, fundId);
           await GameRepository.addLosers(losers, currentDate, fundId);
         } catch (error) {
           console.error("Erreur lors de l'enregistrement", error);
@@ -156,7 +156,7 @@ export default function HomeScreen({ route, navigation }) {
         setModalVisible(true);
         setGameEnded(true);
         setPlayerList(prev => prev.map(p => 
-          p.id === winner.id ? {...p, reached120: true} : p
+          p.idplayer === winner.idplayer ? {...p, reached120: true} : p
         ));
         return true;
       }
@@ -181,8 +181,8 @@ export default function HomeScreen({ route, navigation }) {
 
   // Joueur actuel
   const currentPlayer = playerList[currentTurnIndex];
-
-  // Passe au joueur suivant
+  // console.log(`player ${currentPlayer.name}`)
+  
   const nextTurn = () => {
     setCurrentTurnIndex((prev) => (prev + 1) % playerList.length);
   };
@@ -197,7 +197,7 @@ export default function HomeScreen({ route, navigation }) {
 
     setPlayerList(prevPlayers => {
       return prevPlayers.map(player => {
-        if (player.id === playerId) {
+        if (player.idplayer === playerId) {
           return {
             ...player,
             score: player.score + score,
@@ -211,6 +211,8 @@ export default function HomeScreen({ route, navigation }) {
     setScoreInput('');
     nextTurn();
   };
+  // console.log(playerList);
+
 
   // Passe le tour sans ajouter de score
   const skipTurn = () => {
@@ -244,20 +246,26 @@ export default function HomeScreen({ route, navigation }) {
         <ScrollView contentContainerStyle={styles.summaryContainer}>
           <Text style={styles.summaryTitle}>Résumé de la Partie</Text>
           
-          {playerList
-            .sort((a, b) => b.score - a.score)
-            .map((player, index) => (
-              <View key={player.id} style={styles.summaryPlayerCard}>
-                <Text style={styles.summaryPosition}>{index + 1}er</Text>
-                <View style={styles.summaryPlayerInfo}>
-                  <Text style={styles.summaryPlayerName}>{player.name}</Text>
-                  <Text style={styles.summaryPlayerScore}>{player.score} points</Text>
-                </View>
-                {player.reached120 && (
-                  <Text style={styles.winnerBadge}>🏆 Gagnant</Text>
-                )}
-              </View>
-            ))}
+              {playerList
+                .sort((a, b) => b.score - a.score)
+                .map((player, index) => (
+                  <View key={player.idplayer} style={styles.summaryPlayerCard}>
+                    <Text style={styles.summaryPosition}>{index + 1}er</Text>
+                    <View style={styles.summaryPlayerInfo}>
+                      <Text style={styles.summaryPlayerName}>{player.name}</Text>
+                      <Text style={styles.summaryPlayerScore}>{player.score} points</Text>
+                    </View>
+
+                    {/* Médailles pour les 3 premiers */}
+                    {index === 0 && player.reached120 && (
+                      <Text style={styles.winnerBadge}>🏆 Gagnant</Text>
+                    )}
+                    {index === 0 && <Text style={styles.winnerBadge}>🥇</Text>}
+                    {index === 1 && <Text style={styles.winnerBadge}>🥈</Text>}
+                    {index === 2 && <Text style={styles.winnerBadge}>🥉</Text>}
+                  </View>
+                ))}
+
 
           <TouchableOpacity 
             style={styles.returnButton}
@@ -272,7 +280,6 @@ export default function HomeScreen({ route, navigation }) {
 
   return (
     <Layout>
-      {/* Bouton hamburger */}
       <TouchableOpacity 
         style={styles.hamburgerButton}
         onPress={openSidebar}
@@ -280,7 +287,6 @@ export default function HomeScreen({ route, navigation }) {
         <Icon name="menu" size={30} color="#333" />
       </TouchableOpacity>
 
-      {/* Overlay pour fermer le sidebar */}
       {sidebarOpen && (
         <Animated.View 
           style={[
@@ -296,7 +302,6 @@ export default function HomeScreen({ route, navigation }) {
         </Animated.View>
       )}
 
-      {/* Sidebar animé */}
       <Animated.View 
         style={[
           styles.sidebarContainer,
@@ -311,20 +316,19 @@ export default function HomeScreen({ route, navigation }) {
       </Animated.View>
 
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Tour actuel */}
+
         <View style={styles.turnIndicator}>
           <Text style={styles.turnText}>Tour de :</Text>
           <Text style={styles.currentPlayer}>{currentPlayer.name}</Text>
         </View>
 
-        {/* Liste des joueurs */}
         <View style={styles.playersContainer}>
           {playerList.map(player => (
             <View 
-              key={player.id} 
+              key={player.idplayer} 
               style={[
                 styles.playerCard,
-                player.id === currentPlayer.id && styles.activePlayerCard,
+                player.idplayer === currentPlayer.idplayer && styles.activePlayerCard,
                 player.reached120 && styles.winnerCard
               ]}
             >
@@ -335,7 +339,6 @@ export default function HomeScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* Input score */}
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
@@ -346,16 +349,16 @@ export default function HomeScreen({ route, navigation }) {
           />
         </View>
 
-        {/* Boutons d'action */}
+
         <View style={styles.buttonsContainer}>
           {playerList.map(player => (
             <TouchableOpacity
-              key={player.id}
+              key={player.idplayer}
               style={[
                 styles.scoreButton,
-                player.id === currentPlayer.id && styles.currentPlayerButton
+                player.idplayer === currentPlayer.idplayer && styles.currentPlayerButton
               ]}
-              onPress={() => addScoreToPlayer(player.id)}
+              onPress={() => addScoreToPlayer(player.idplayer)}
               disabled={!scoreInput}
             >
               <Text style={styles.buttonText}>Ajouter à {player.name}</Text>
@@ -363,7 +366,6 @@ export default function HomeScreen({ route, navigation }) {
           ))}
         </View>
 
-        {/* Bouton passer tour */}
         <TouchableOpacity 
           style={styles.skipButton}
           onPress={skipTurn}
@@ -372,7 +374,6 @@ export default function HomeScreen({ route, navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Modal de notification */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 20,
     backgroundColor: '#f5f5f5',
-    marginTop: 50, // Pour éviter que le contenu soit caché sous le header
+    marginTop: 50, 
   },
   hamburgerButton: {
     position: 'absolute',
@@ -564,7 +565,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   scoreButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#BBDEFB',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',

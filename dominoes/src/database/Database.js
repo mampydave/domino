@@ -1,85 +1,55 @@
-import SQLite from 'react-native-sqlite-storage';
+import * as SQLite from 'expo-sqlite';
 import { SCHEMA, SCHEMA_VERSION } from './schema';
-
-// Active le mode debug si nécessaire
-SQLite.DEBUG(true);
-SQLite.enablePromise(true);
 
 class Database {
   constructor() {
-    this.db = null;
-    this.dbName = 'game.db';
+    this.dbPromise = SQLite.openDatabaseAsync('game.db');
   }
 
-  // Initialisation de la base de données
   async init() {
     try {
-      this.db = await SQLite.openDatabase(
-        this.dbName,
-        SCHEMA_VERSION,
-        'Jeu de domino Database',
-        -1, // Taille max (infinie si -1)
-        this._onDatabaseOpen,
-        this._onDatabaseError
-      );
-      
       await this._createTables();
-      return this.db;
+      return this.dbPromise;
     } catch (error) {
       console.error('Erreur initialisation DB:', error);
       throw error;
     }
   }
 
-  // Création des tables
   async _createTables() {
+    const db = await this.dbPromise;
+    
     try {
-      await this.db.transaction(async (tx) => {
-        for (const table of SCHEMA.tables) {
-          // Construction de la requête CREATE TABLE
-          const columns = table.columns.map(col => {
-            if (col.type) {
-              return `${col.name} ${col.type}`;
-            }
-            return col.name; // Pour les contraintes sans type
-          }).join(', ');
-          
-          await tx.executeSql(
-            `CREATE TABLE IF NOT EXISTS ${table.name} (${columns})`,
-            []
-          );
-        }
-      });
-    } catch (error) {
-      console.error('Erreur création tables:', error);
-      throw error;
+
+      await db.execAsync('BEGIN TRANSACTION');
+      
+
+      for (const table of SCHEMA.tables) {
+        const columns = table.columns.map(col =>
+          col.type ? `${col.name} ${col.type}` : col.name
+        ).join(', ');
+        
+        const sql = `CREATE TABLE IF NOT EXISTS ${table.name} (${columns})`;
+        await db.execAsync(sql);
+        console.log(`Table ${table.name} créée.`);
+      }
+      
+
+      await db.execAsync('COMMIT');
+    } catch (err) {
+      await db.execAsync('ROLLBACK');
+      console.error('Erreur lors de la création des tables:', err);
+      throw err;
     }
   }
 
-  // Callback pour ouverture réussie
-  _onDatabaseOpen(db) {
-    console.log('Database OPENED:', db);
-  }
-
-  // Callback pour erreurs
-  _onDatabaseError(error) {
-    console.error('Database ERROR:', error);
-  }
-
-  // Fermer la base de données
   async close() {
-    if (this.db) {
-      await this.db.close();
-      this.db = null;
-    }
+    console.warn("La fermeture explicite de la DB n'est pas supportée dans expo-sqlite.");
   }
 
-  // Supprimer la base (pour développement)
   async delete() {
-    await SQLite.deleteDatabase(this.dbName);
-    this.db = null;
+    console.warn("La suppression de la base n'est pas directement supportée avec expo-sqlite.");
   }
 }
 
-// Exportez une instance unique (singleton)
 export default new Database();

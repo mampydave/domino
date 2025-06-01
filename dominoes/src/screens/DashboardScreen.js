@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect ,useRef} from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,15 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  RefreshControl, // Import RefreshControl
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Sidebar from '../components/Sidebar';
 import GameRepository from '../database/GameRepository';
+import PlayerRepository from '../database/PlayerRepository';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ProgressBar } from 'react-native-paper';
+import PerformanceChart from './PerformanceChart';
 
 const DashboardScreen = ({ route, navigation }) => {
   const { players } = route.params || { players: [] };
@@ -25,8 +30,15 @@ const DashboardScreen = ({ route, navigation }) => {
   const [fundAmount, setFundAmount] = useState('');
   const [loading, setLoading] = useState(true);
   const [topPlayers, setTopPlayers] = useState([]);
+  const [allPlayers, setAllPlayers] = useState([]);
   const [worstPlayers, setWorstPlayers] = useState([]);
   const [totalFunds, setTotalFunds] = useState(0);
+  const [lastFunds, setLastFunds] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [topPlayersfetch, setTopPlayersfetch] = useState([]);
+  const [worstPlayersfetch, setWorstPlayersfetch] = useState([]);
+  const [refreshing, setRefreshing] = useState(false); // État pour le pull-to-refresh
+
   const [stats, setStats] = useState({
     totalWins: 0,
     totalLosses: 0,
@@ -40,28 +52,52 @@ const DashboardScreen = ({ route, navigation }) => {
   const correctPassword = 'dashboard123D';
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const topPlayersData = await GameRepository.getTopPlayersByWins();
-        setTopPlayers(topPlayersData);
-        const worstPlayersData = await GameRepository.getWorstPlayersByLosses();
-        setWorstPlayers(worstPlayersData);
-        const totalFundsData = await GameRepository.getTotalFunds();
-        setTotalFunds(totalFundsData);
-        const statsData = await GameRepository.getGlobalStats();
-        setStats(statsData);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        Alert.alert('Erreur', 'Impossible de charger les données');
-      } finally {
-        setLoading(false);
-      }
-    };
     if (isAuthenticated) {
       fetchDashboardData();
     }
   }, [isAuthenticated]);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setRefreshing(true); // Activer l'état de rafraîchissement
+      const topPlayersData = await GameRepository.getTopPlayersByWins();
+      setTopPlayers(topPlayersData);
+      console.log('topPlayer ', topPlayersData);
+      const worstPlayersData = await GameRepository.getWorstPlayersByLosses();
+      setWorstPlayers(worstPlayersData);
+      console.log('worstPlayer ', worstPlayersData);
+
+      const topPlayersDatafetch = await GameRepository.fetchAllWinsData();
+      setTopPlayersfetch(topPlayersDatafetch);
+      console.log('topPlayer fetch', topPlayersDatafetch);
+
+      const worstPlayersDatafetch = await GameRepository.fetchAllLossesData();
+      setWorstPlayersfetch(worstPlayersDatafetch);
+      console.log('worstPlayer fetch', worstPlayersDatafetch);
+
+      const totalFundsData = await GameRepository.getTotalFunds();
+      console.log('totalFundsData: ', totalFundsData);
+      const lastFundsData = await GameRepository.getLastFund();
+      setLastFunds(lastFundsData?.amount ?? 0);
+
+      setAllPlayers(await PlayerRepository.getAllPlayers());
+
+      setTotalFunds(totalFundsData);
+      const statsData = await GameRepository.getGlobalStats();
+      setStats(statsData);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      Alert.alert('Erreur', 'Impossible de charger les données');
+    } finally {
+      setLoading(false);
+      setRefreshing(false); // Désactiver l'état de rafraîchissement
+    }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
 
   const openSidebar = () => {
     setSidebarOpen(true);
@@ -139,7 +175,7 @@ const DashboardScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await GameRepository.resetAllData();
-              
+              fetchDashboardData(); // Rafraîchir après réinitialisation
             } catch (error) {
               console.error('Erreur lors de la réinitialisation :', error);
             }
@@ -160,10 +196,19 @@ const DashboardScreen = ({ route, navigation }) => {
             <TextInput
               style={styles.input}
               placeholder="Entrez le mot de passe"
-              secureTextEntry
+              secureTextEntry={!showPassword}
               value={password}
               onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
             />
+            <TouchableOpacity onPress={togglePasswordVisibility} style={styles.eyeIcon}>
+              <Icon 
+                name={showPassword ? 'visibility-off' : 'visibility'} 
+                size={24} 
+                color="#333" 
+              />
+            </TouchableOpacity>
           </View>
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
             <Text style={styles.loginButtonText}>Se connecter</Text>
@@ -204,13 +249,23 @@ const DashboardScreen = ({ route, navigation }) => {
         <Sidebar isOpen={sidebarOpen} onClose={closeSidebar} onNavigate={navigateTo} />
       </Animated.View>
 
-      <ScrollView contentContainerStyle={styles.dashboardContainer}>
+      <ScrollView
+        contentContainerStyle={styles.dashboardContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={fetchDashboardData}
+            colors={['#2196F3']} // Couleur de l'indicateur de chargement
+            tintColor="#2196F3" // Couleur pour iOS
+          />
+        }
+      >
         <Text style={styles.dashboardTitle}>Tableau de Bord Financier</Text>
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryItem}>
             <Icon name="account-balance" size={30} color="#4CAF50" />
-            <Text style={styles.summaryText}>Total Fonds: {totalFunds.toFixed(2)} €</Text>
+            <Text style={styles.summaryText}>Fonds actuel: {lastFunds.toFixed(2)} Ar</Text>
           </View>
           <View style={styles.summaryItem}>
             <Icon name="emoji-events" size={30} color="#FFC107" />
@@ -236,7 +291,7 @@ const DashboardScreen = ({ route, navigation }) => {
               <View style={styles.playerInfo}>
                 <Text style={styles.playerName}>{player.name}</Text>
                 <Text style={styles.playerStats}>
-                  {player.totalWins} victoires • {player.totalAmount?.toFixed(2)} €
+                  {player.totalWins} victoires • {player.totalAmount?.toFixed(2)} Ar
                 </Text>
               </View>
               <Icon name="trending-up" size={24} color="#4CAF50" />
@@ -252,7 +307,7 @@ const DashboardScreen = ({ route, navigation }) => {
               <View style={styles.playerInfo}>
                 <Text style={styles.playerName}>{player.name}</Text>
                 <Text style={styles.playerStats}>
-                  {player.totalLosses} pertes • {player.totalAmount?.toFixed(2)} €
+                  {player.totalLosses} pertes • {player.totalAmount?.toFixed(2)} Ar
                 </Text>
               </View>
               <Icon name="trending-down" size={24} color="#F44336" />
@@ -260,56 +315,56 @@ const DashboardScreen = ({ route, navigation }) => {
           ))}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📊 Comparaison Joueurs</Text>
-          <View style={styles.comparisonContainer}>
-            <View style={styles.comparisonLegend}>
-              <View style={[styles.legendItem, styles.winLegend]} />
-              <Text>Gains</Text>
-              <View style={[styles.legendItem, styles.lossLegend]} />
-              <Text>Pertes</Text>
-            </View>
-            {[...topPlayers, ...worstPlayers]
-              .filter((v, i, a) => a.findIndex(t => t.idplayer === v.idplayer) === i)
-              .map(player => (
-                <View key={player.idplayer} style={styles.comparisonItem}>
-                  <Text style={styles.comparisonName}>{player.name}</Text>
-                  <View style={styles.barContainer}>
-                    <View
-                      style={[
-                        styles.winBar,
-                        { width: `${((player.totalWinsAmount || 0) / (totalFunds || 1)) * 100}%` },
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.lossBar,
-                        { width: `${((player.totalLossesAmount || 0) / (totalFunds || 1)) * 100}%` },
-                      ]}
-                    />
-                  </View>
-                </View>
-              ))}
-          </View>
-        </View>
+        <PerformanceChart
+          winTransactions={topPlayersfetch}
+          lossTransactions={worstPlayersfetch}
+        />
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Détails des Joueurs</Text>
-          {players.map((player) => (
-            <View key={player.idplayer} style={styles.playerCard}>
-              <Text style={styles.playerName}>{player.nom}</Text>
-              <Text style={styles.playerDetail}>
-                Gains: {(topPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0).toFixed(2)} €
-              </Text>
-              <Text style={styles.playerDetail}>
-                Pertes: {(worstPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0).toFixed(2)} €
-              </Text>
-              <Text style={styles.playerDetail}>
-                Net: {((topPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0) -
-                  (worstPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0)).toFixed(2)} €
-              </Text>
-            </View>
-          ))}
+          <Text style={styles.sectionTitle}>Statistiques global des Joueurs</Text>
+          {allPlayers.map((player) => {
+            const gains = topPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0;
+            const pertes = worstPlayers.find(p => p.idplayer === player.idplayer)?.totalAmount || 0;
+            const net = gains - pertes;
+
+            return (
+              <View key={player.idplayer} style={styles.playerCard}>
+                <View style={styles.playerHeader}>
+                  <Text style={styles.playerName}>{player.name}</Text>
+                  <View style={[
+                    styles.netBadge,
+                    net >= 0 ? styles.positiveNet : styles.negativeNet
+                  ]}>
+                    <Text style={styles.netText}>{net.toFixed(2)} Ar</Text>
+                  </View>
+                </View>
+
+                <View style={styles.statsContainer}>
+                  <View style={styles.statItem}>
+                    <Ionicons name="trending-up" size={18} color="#4CAF50" />
+                    <Text style={[styles.statValue, styles.gainText]}>
+                      {gains.toFixed(2)} Ar
+                    </Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Ionicons name="trending-down" size={18} color="#F44336" />
+                    <Text style={[styles.statValue, styles.lossText]}>
+                      {pertes.toFixed(2)} Ar
+                    </Text>
+                  </View>
+                </View>
+
+                <ProgressBar
+                  progress={pertes > 0 ? gains / (gains + pertes) : 1}
+                  color="#4CAF50"
+                  unfilledColor="#F44336"
+                  borderWidth={0}
+                  height={4}
+                  style={styles.progressBar}
+                />
+              </View>
+            );
+          })}
         </View>
 
         <TouchableOpacity
@@ -322,7 +377,6 @@ const DashboardScreen = ({ route, navigation }) => {
         <TouchableOpacity style={styles.resetButton} onPress={resetAllData}>
           <Text style={styles.resetText}>Réinitialiser toutes les données</Text>
         </TouchableOpacity>
-
       </ScrollView>
 
       <Modal
@@ -336,7 +390,7 @@ const DashboardScreen = ({ route, navigation }) => {
             <Text style={styles.modalTitle}>Ajouter un Fonds</Text>
             <TextInput
               style={styles.modalInput}
-              placeholder="Montant (€)"
+              placeholder="Montant (Ar)"
               keyboardType="numeric"
               value={fundAmount}
               onChangeText={setFundAmount}
@@ -362,6 +416,7 @@ const DashboardScreen = ({ route, navigation }) => {
   );
 };
 
+// Les styles restent inchangés
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -414,17 +469,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     fontSize: 16,
+    color: '#333',
+  },
+  eyeIcon: {
+    padding: 5,
   },
   loginButton: {
-    backgroundColor: '#2196F3',
-    padding: 15,
-    borderRadius: 8,
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 5,
     alignItems: 'center',
   },
   loginButtonText: {
     color: 'white',
-    fontSize: 16,
     fontWeight: 'bold',
+    fontSize: 16,
   },
   hamburgerButton: {
     position: 'absolute',
@@ -487,23 +546,32 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   section: {
-    marginBottom: 20,
+    marginVertical: 15,
+    width: '100%',
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: '#2196F3',
     marginBottom: 15,
-    color: '#333',
+    paddingLeft: 10,
   },
   playerCard: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  playerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
   },
   playerRank: {
     fontSize: 18,
@@ -517,7 +585,7 @@ const styles = StyleSheet.create({
   },
   playerName: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#333',
   },
   playerStats: {
@@ -641,6 +709,44 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  netBadge: {
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  positiveNet: {
+    backgroundColor: '#E8F5E9',
+  },
+  negativeNet: {
+    backgroundColor: '#FFEBEE',
+  },
+  netText: {
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statValue: {
+    marginLeft: 5,
+    fontSize: 16,
+  },
+  gainText: {
+    color: '#4CAF50',
+  },
+  lossText: {
+    color: '#F44336',
+  },
+  progressBar: {
+    borderRadius: 2,
+    marginTop: 5,
   },
 });
 
