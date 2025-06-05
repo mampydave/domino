@@ -40,12 +40,12 @@ export default function HomeScreen({ route, navigation }) {
   const [modalMessage, setModalMessage] = useState('');
   const [gameEnded, setGameEnded] = useState(false);
 
-  // États du Sidebar
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const sidebarOffset = useRef(new Animated.Value(-Dimensions.get('window').width)).current;
 
-  // Animation pour ouvrir le sidebar
+
   const openSidebar = () => {
     setSidebarOpen(true);
     Animated.parallel([
@@ -62,7 +62,7 @@ export default function HomeScreen({ route, navigation }) {
     ]).start();
   };
 
-  // Animation pour fermer le sidebar
+
   const closeSidebar = () => {
     Animated.parallel([
       Animated.timing(overlayOpacity, {
@@ -78,7 +78,7 @@ export default function HomeScreen({ route, navigation }) {
     ]).start(() => setSidebarOpen(false));
   };
 
-  // Navigation depuis le sidebar
+
   const navigateTo = (screen) => {
     closeSidebar();
     if (screen === 'Selection') {
@@ -95,15 +95,19 @@ export default function HomeScreen({ route, navigation }) {
 
 
   
-  // Vérifie les conditions de victoire
+
   useEffect(() => {
     const checkAchievements = async () => {
+
+      console.log('player :', await PlayerRepository.getAllPlayers());
+      console.log('players selected :', players);
+
       const allScores = playerList.map(p => p.score);
       const maxScore = Math.max(...allScores);
       const minScore = Math.min(...allScores);
       const winner = playerList.find(p => p.score === maxScore);
       const losers = playerList.filter(p => p.idplayer !== winner?.idplayer).map(p => p.idplayer);
-      let fundId = 1; 
+      let fundId = 500; 
 
       try {
         const lastFund = await GameRepository.getLastFund();
@@ -117,13 +121,17 @@ export default function HomeScreen({ route, navigation }) {
       // Condition 1: Un joueur atteint 60+ et les autres à 0
       if (maxScore >= 60 && minScore === 0 && !winner?.reached60) {
         const achiever = playerList.find(p => p.score >= 60);
-        if (achiever) {
-          // Enregistrement dans la base de données
+        const tsypoinse = playerList.find(p => p.score > 0 && p.idplayer !== achiever?.idplayer);
+        console.log('tsy poinse :', tsypoinse);
+        
+        if (achiever && !tsypoinse) {
+
           try {
             // const fundId = await GameRepository.getLastFund();
             const currentDate = new Date().toISOString();
+            const fundIdwin = fundId * (playerList.length - 1);
             
-            await GameRepository.addWinner(achiever.idplayer, currentDate, fundId);
+            await GameRepository.addWinner(achiever.idplayer, currentDate, fundIdwin);
             await GameRepository.addLosers(losers, currentDate, fundId);
           } catch (error) {
             console.error("Erreur lors de l'enregistrement", error);
@@ -141,12 +149,13 @@ export default function HomeScreen({ route, navigation }) {
   
       // Condition 2: Un joueur atteint 120+
       if (maxScore >= 120 && !winner?.reached120) {
-        // Enregistrement dans la base de données
+        
         try {
           // const fundId = await GameRepository.createFund(winner.score);
           const currentDate = new Date().toISOString();
+          const fundIdwin = fundId * (playerList.length - 1);
           
-          await GameRepository.addWinner(winner.idplayer, currentDate, fundId);
+          await GameRepository.addWinner(winner.idplayer, currentDate, fundIdwin);
           await GameRepository.addLosers(losers, currentDate, fundId);
         } catch (error) {
           console.error("Erreur lors de l'enregistrement", error);
@@ -187,7 +196,7 @@ export default function HomeScreen({ route, navigation }) {
     setCurrentTurnIndex((prev) => (prev + 1) % playerList.length);
   };
 
-  // Ajoute un score à un joueur
+
   const addScoreToPlayer = (playerId) => {
     const score = parseInt(scoreInput);
     if (isNaN(score)) {
@@ -214,7 +223,7 @@ export default function HomeScreen({ route, navigation }) {
   // console.log(playerList);
 
 
-  // Passe le tour sans ajouter de score
+
   const skipTurn = () => {
     setPlayerList(prevPlayers =>
       prevPlayers.map((player, index) =>
@@ -226,7 +235,7 @@ export default function HomeScreen({ route, navigation }) {
     nextTurn();
   };
 
-  // Ferme le modal et gère la fin de jeu
+
   const handleModalClose = () => {
     setModalVisible(false);
     if (gameEnded) {
@@ -234,12 +243,12 @@ export default function HomeScreen({ route, navigation }) {
     }
   };
 
-  // Retour à la sélection des joueurs
+
   const returnToSelection = () => {
     navigation.goBack();
   };
 
-  // Écran de résumé
+
   if (showSummary) {
     return (
       <Layout>
@@ -256,7 +265,6 @@ export default function HomeScreen({ route, navigation }) {
                       <Text style={styles.summaryPlayerScore}>{player.score} points</Text>
                     </View>
 
-                    {/* Médailles pour les 3 premiers */}
                     {index === 0 && player.reached120 && (
                       <Text style={styles.winnerBadge}>🏆 Gagnant</Text>
                     )}

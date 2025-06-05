@@ -3,7 +3,7 @@ import { SCHEMA, SCHEMA_VERSION } from './schema';
 
 class Database {
   constructor() {
-    this.dbPromise = SQLite.openDatabaseAsync('game.db');
+    this.dbPromise = SQLite.openDatabaseAsync('gamedave1.db');
   }
 
   async init() {

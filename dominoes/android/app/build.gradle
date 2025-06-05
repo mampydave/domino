@@ -118,6 +118,8 @@ android {
         }
     }
     packagingOptions {
+        pickFirst 'lib/**/libopencv_java3.so'
+        pickFirst 'lib/**/libopencv_java4.so'
         jniLibs {
             useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
         }
@@ -128,6 +130,11 @@ android {
     publishing {
         singleVariant("release") {
             withSourcesJar()
+        }
+    }
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs'] 
         }
     }
 }
