@@ -1,4 +1,6 @@
 import Database from './Database';
+import uuid from 'react-native-uuid';
+import { getDeviceId } from './../services/DeviceService';
 
 class GameRepository {
   constructor() {
@@ -9,10 +11,17 @@ class GameRepository {
     await this.db.init();
   }
 
+
   async createFund(amount) {
     try {
       const db = await this.db.dbPromise;
-      const result = await db.runAsync('INSERT INTO fond (amount) VALUES (?)', [amount]);
+      const uuidval = uuid.v4();
+      const deviceId = await getDeviceId();
+
+      const result = await db.runAsync(
+        'INSERT INTO fond (uuid, device_id, amount) VALUES (?, ?, ?)',
+        [uuidval, deviceId, amount]
+      );
       return result.lastInsertRowId;
     } catch (error) {
       console.error('Erreur création fond:', error);
@@ -31,14 +40,87 @@ class GameRepository {
     }
   }
   
+  async getUnsyncedFunds() {
+    try {
+      const db = await this.db.dbPromise;
+      const result = await db.getAllAsync('SELECT * FROM fond WHERE is_synced = 0');
+      return result;
+    } catch (error) {
+      console.error('Erreur récupération fonds non synchronisés:', error);
+      throw error;
+    }
+  }
+
+
   async addWinner(playerId, date, fundId) {
     try {
       const db = await this.db.dbPromise;
-      await db.runAsync('INSERT INTO gagnant (idplayer, date, fond) VALUES (?, ?, ?)', 
-        [playerId, date, fundId]);
+      const uuidval = uuid.v4();
+      const deviceId = await getDeviceId();
+
+      await db.runAsync(
+        'INSERT INTO gagnant (uuid, device_id, idplayer, date, fond) VALUES (?, ?, ?, ?, ?)',
+        [uuidval, deviceId, playerId, date, fundId]
+      );
       return true;
     } catch (error) {
       console.error('Erreur ajout gagnant:', error);
+      throw error;
+    }
+  }
+
+  async createFullGagnantIfNotExists(winner) {
+    try {
+      const db = await this.db.dbPromise;
+
+      const generatedUuid = winner.uuid ?? uuid.v4();
+      const deviceId = winner.device_id ?? await getDeviceId();
+      const idplayer = winner.idplayer;
+      const dateVal = winner.date ?? new Date().toISOString();
+      const fond = winner.fond;
+      const is_synced = typeof winner.is_synced !== 'undefined' ? winner.is_synced : 0;
+      const updatedAt = winner.updated_at ?? new Date().toISOString();
+
+
+      const existing = await db.getAsync(
+        `SELECT uuid FROM gagnant WHERE uuid = ?`,
+        [generatedUuid]
+      );
+
+      if (!existing) {
+        await db.runAsync(
+          `INSERT INTO gagnant 
+          (uuid, device_id, idplayer, date, fond, is_synced, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            generatedUuid,
+            deviceId,
+            idplayer,
+            dateVal,
+            fond,
+            is_synced,
+            updatedAt
+          ]
+        );
+        return generatedUuid;
+      } else {
+        console.log(`Gagnant déjà existant : ${generatedUuid}`);
+        return null; 
+      }
+    } catch (error) {
+      console.error('Erreur création gagnant :', error);
+      throw error;
+    }
+  }
+
+
+  async getUnsyncedWinners() {
+    try {
+      const db = await this.db.dbPromise;
+      const result = await db.getAllAsync('SELECT * FROM gagnant WHERE is_synced = 0');
+      return result;
+    } catch (error) {
+      console.error('Erreur récupération gagnants non synchronisés:', error);
       throw error;
     }
   }
@@ -47,12 +129,18 @@ class GameRepository {
     try {
       const db = await this.db.dbPromise;
       await db.execAsync('BEGIN TRANSACTION');
-      
+      const deviceId = await getDeviceId();
       try {
+
+
         for (const playerId of losersIds) {
-          await db.runAsync('INSERT INTO perte (idplayer, date, fond) VALUES (?, ?, ?)', 
-            [playerId, date, fundId]);
+          const uuidval = uuid.v4();
+          await db.runAsync(
+            'INSERT INTO perte (uuid, device_id, idplayer, date, fond) VALUES (?, ?, ?, ?, ?)',
+            [uuidval, deviceId, playerId, date, fundId]
+          );
         }
+
         await db.execAsync('COMMIT');
         return true;
       } catch (error) {
@@ -65,12 +153,68 @@ class GameRepository {
     }
   }
 
+  async createFullPerteIfNotExists(loss) {
+    try {
+      const db = await this.db.dbPromise;
+
+      const generatedUuid = loss.uuid ?? uuid.v4();
+      const deviceId = loss.device_id ?? await getDeviceId();
+      const idplayer = loss.idplayer;
+      const dateVal = loss.date ?? new Date().toISOString();
+      const fond = loss.fond;
+      const is_synced = typeof loss.is_synced !== 'undefined' ? loss.is_synced : 0;
+      const updatedAt = loss.updated_at ?? new Date().toISOString();
+
+      const existing = await db.getAsync(
+        `SELECT uuid FROM perte WHERE uuid = ?`,
+        [generatedUuid]
+      );
+
+      if (!existing) {
+        await db.runAsync(
+          `INSERT INTO perte 
+          (uuid, device_id, idplayer, date, fond, is_synced, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            generatedUuid,
+            deviceId,
+            idplayer,
+            dateVal,
+            fond,
+            is_synced,
+            updatedAt
+          ]
+        );
+        return generatedUuid;
+      } else {
+        console.log(`Perte déjà existante : ${generatedUuid}`);
+        return null;
+      }
+    } catch (error) {
+      console.error('Erreur création perte :', error);
+      throw error;
+    }
+  }
+
+
+  async getUnsyncedLosses() {
+    try {
+      const db = await this.db.dbPromise;
+      const result = await db.getAllAsync('SELECT * FROM perte WHERE is_synced = 0');
+      return result;
+    } catch (error) {
+      console.error('Erreur récupération pertes non synchronisées:', error);
+      throw error;
+    }
+  }
+
+
   async getTopPlayersByWins() {
     try {
       const db = await this.db.dbPromise;
       
       console.log('gagnant',await db.getAllAsync('SELECT * FROM gagnant'));
-            console.log('perdant',await db.getAllAsync('SELECT * FROM perte'));
+      console.log('perdant',await db.getAllAsync('SELECT * FROM perte'));
       // console.log('player',await db.getAllAsync('SELECT * FROM player LIMIT 5'));
       const result = await db.getAllAsync(`
         SELECT p.idplayer, p.name, 
@@ -125,7 +269,6 @@ class GameRepository {
       const db = await this.db.dbPromise;
       const stats = {};
       
-      // Exécution en parallèle pour meilleure performance
       const [wins, losses, avgWin, avgLoss] = await Promise.all([
         db.getFirstAsync('SELECT COUNT(*) as count FROM gagnant'),
         db.getFirstAsync('SELECT COUNT(*) as count FROM perte'),
@@ -250,6 +393,52 @@ class GameRepository {
       throw error;
     }
   }
+
+  async markFundsAsSynced(ids) {
+    try {
+      const db = await this.db.dbPromise;
+      const placeholders = ids.map(() => '?').join(',');
+      await db.runAsync(
+        `UPDATE fond SET is_synced = 1 WHERE idfond IN (${placeholders})`,
+        ids
+      );
+      return true;
+    } catch (error) {
+      console.error('Erreur mise à jour sync fonds:', error);
+      throw error;
+    }
+  }
+
+  async markWinnersAsSynced(ids) {
+    try {
+      const db = await this.db.dbPromise;
+      const placeholders = ids.map(() => '?').join(',');
+      await db.runAsync(
+        `UPDATE gagnant SET is_synced = 1 WHERE idgagnant IN (${placeholders})`,
+        ids
+      );
+      return true;
+    } catch (error) {
+      console.error('Erreur mise à jour sync gagnants:', error);
+      throw error;
+    }
+  }
+
+  async markLossesAsSynced(ids) {
+    try {
+      const db = await this.db.dbPromise;
+      const placeholders = ids.map(() => '?').join(',');
+      await db.runAsync(
+        `UPDATE perte SET is_synced = 1 WHERE idperte IN (${placeholders})`,
+        ids
+      );
+      return true;
+    } catch (error) {
+      console.error('Erreur mise à jour sync pertes:', error);
+      throw error;
+    }
+  }
+
 }
 
 export default new GameRepository();

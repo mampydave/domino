@@ -11,7 +11,7 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  RefreshControl, // Import RefreshControl
+  RefreshControl, 
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Sidebar from '../components/Sidebar';
@@ -37,7 +37,7 @@ const DashboardScreen = ({ route, navigation }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [topPlayersfetch, setTopPlayersfetch] = useState([]);
   const [worstPlayersfetch, setWorstPlayersfetch] = useState([]);
-  const [refreshing, setRefreshing] = useState(false); // État pour le pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false); 
 
   const [stats, setStats] = useState({
     totalWins: 0,
@@ -60,7 +60,7 @@ const DashboardScreen = ({ route, navigation }) => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      setRefreshing(true); // Activer l'état de rafraîchissement
+      setRefreshing(true); 
       const topPlayersData = await GameRepository.getTopPlayersByWins();
       setTopPlayers(topPlayersData);
       console.log('topPlayer ', topPlayersData);
@@ -79,7 +79,7 @@ const DashboardScreen = ({ route, navigation }) => {
       const totalFundsData = await GameRepository.getTotalFunds();
       console.log('totalFundsData: ', totalFundsData);
       const lastFundsData = await GameRepository.getLastFund();
-      setLastFunds(lastFundsData?.amount ?? 0);
+      setLastFunds(lastFundsData?.amount ?? 500);
 
       setAllPlayers(await PlayerRepository.getAllPlayers());
 
@@ -91,7 +91,7 @@ const DashboardScreen = ({ route, navigation }) => {
       Alert.alert('Erreur', 'Impossible de charger les données');
     } finally {
       setLoading(false);
-      setRefreshing(false); // Désactiver l'état de rafraîchissement
+      setRefreshing(false); 
     }
   };
 
@@ -175,7 +175,7 @@ const DashboardScreen = ({ route, navigation }) => {
           onPress: async () => {
             try {
               await GameRepository.resetAllData();
-              fetchDashboardData(); // Rafraîchir après réinitialisation
+              fetchDashboardData(); 
             } catch (error) {
               console.error('Erreur lors de la réinitialisation :', error);
             }
@@ -255,8 +255,8 @@ const DashboardScreen = ({ route, navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={fetchDashboardData}
-            colors={['#2196F3']} // Couleur de l'indicateur de chargement
-            tintColor="#2196F3" // Couleur pour iOS
+            colors={['#2196F3']} 
+            tintColor="#2196F3" 
           />
         }
       >

@@ -1,171 +1,177 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-react-native';
 import * as FileSystem from 'expo-file-system';
 import { decodeJpeg } from '@tensorflow/tfjs-react-native';
+import { handleUploadWithConfirmation } from '../services/UploadService';
 
 const Sidebar = ({ isOpen, onClose, onNavigate }) => {
   const [tfReady, setTfReady] = useState(false);
   const [hasPermission, setHasPermission] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        console.log('Vérification des permissions de la caméra...');
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        console.log('Statut des permissions:', status);
-        setHasPermission(status === 'granted');
-
-        if (status !== 'granted') {
-          Alert.alert(
-            'Permission refusée',
-            'Veuillez activer la caméra dans les paramètres.'
-          );
-          return;
-        }
-
-        console.log('Initialisation de TensorFlow...');
-        await tf.ready();
-        setTfReady(true);
-        console.log('TensorFlow prêt');
-      } catch (error) {
-        console.error('Erreur init:', error);
-        Alert.alert('Erreur', 'Impossible d\'initialiser la caméra ou TensorFlow');
+    (async () => {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission refusée',
+          'Veuillez autoriser l’accès à la caméra dans les paramètres.'
+        );
+        return;
       }
-    };
-
-    initialize();
+      await tf.ready();
+      setTfReady(true);
+    })();
   }, []);
 
-  const countPipsInRegion = (imageTensor, region) => {
+  const analyzeImage = async (imageUri) => {
     try {
-      const { x, y, width, height } = region;
-      const regionTensor = tf.tidy(() => {
-        return tf.slice(imageTensor, [Math.round(y), Math.round(x), 0], [Math.round(height), Math.round(width), 3]);
+      setLoading(true);
+
+      // Étape 1 : Charger et décoder l'image
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
+      const byteArray = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      let imageTensor = decodeJpeg(byteArray).toFloat();
 
-      const grayTensor = tf.tidy(() => {
-        return regionTensor.mean(2).expandDims(2);
-      });
+      // Étape 2 : Redimensionner l'image
+      const [h, w] = imageTensor.shape.slice(0, 2);
+      const newW = 300;
+      const newH = Math.round((h / w) * newW);
+      imageTensor = tf.image.resizeBilinear(imageTensor, [newH, newW]);
 
-      const threshold = 0.2;
-      const binaryTensor = grayTensor.less(threshold).cast('float32');
+      // Étape 3 : Convertir en niveaux de gris et normaliser
+      const gray = imageTensor.mean(2).div(255).expandDims(2);
 
-      const pixelValues = binaryTensor.dataSync();
-      const visited = new Set();
-      let pipCount = 0;
+      // Étape 4 : Ajuster le seuil de binarisation (abaissé à 0.2 pour capturer plus de points sombres)
+      const binary = gray.less(tf.scalar(0.2)).cast('int32');
+      const data = binary.squeeze().arraySync();
 
-      for (let i = 0; i < pixelValues.length; i++) {
-        if (pixelValues[i] === 1 && !visited.has(i)) {
-          pipCount++;
-          const stack = [i];
-          while (stack.length > 0) {
-            const idx = stack.pop();
-            if (!visited.has(idx) && pixelValues[idx] === 1) {
-              visited.add(idx);
-              const neighbors = [idx - Math.round(width), idx + Math.round(width), idx - 1, idx + 1];
-              for (const n of neighbors) {
-                if (
-                  n >= 0 &&
-                  n < pixelValues.length &&
-                  !visited.has(n) &&
-                  pixelValues[n] === 1
-                ) {
-                  stack.push(n);
-                }
+      // Étape 5 : Détecter les dominos
+      // Nouvelle approche : Identifier les régions blanches connectées (dominos) avec DFS
+      const visitedRegions = Array.from({ length: newH }, () => Array(newW).fill(false));
+      const dominoRegions = [];
+
+      const dfsRegion = (y, x) => {
+        const stack = [[y, x]];
+        const region = [];
+        while (stack.length) {
+          const [cy, cx] = stack.pop();
+          if (
+            cy < 0 || cy >= newH || cx < 0 || cx >= newW ||
+            visitedRegions[cy][cx] || data[cy][cx] === 1 // Ignorer les points noirs
+          ) continue;
+          visitedRegions[cy][cx] = true;
+          region.push([cy, cx]);
+          stack.push([cy + 1, cx], [cy - 1, cx], [cy, cx + 1], [cy, cx - 1]);
+        }
+        return region;
+      };
+
+      // Trouver toutes les régions blanches (dominos)
+      for (let y = 0; y < newH; y++) {
+        for (let x = 0; x < newW; x++) {
+          if (!visitedRegions[y][x] && data[y][x] === 0) {
+            const region = dfsRegion(y, x);
+            if (region.length > 1000) { // Filtrer les petites régions (bruit)
+              // Calculer les limites de la région (bounding box)
+              let minY = newH, maxY = 0, minX = newW, maxX = 0;
+              for (const [ry, rx] of region) {
+                minY = Math.min(minY, ry);
+                maxY = Math.max(maxY, ry);
+                minX = Math.min(minX, rx);
+                maxX = Math.max(maxX, rx);
               }
+              dominoRegions.push({ minY, maxY, minX, maxX });
             }
           }
         }
       }
 
-      tf.dispose([regionTensor, grayTensor, binaryTensor]);
-      return Math.min(pipCount, 6);
-    } catch (e) {
-      console.error('Erreur pip:', e);
-      return 0;
-    }
-  };
+      console.log("Nombre de dominos détectés :", dominoRegions.length);
 
-  const simulateDominoDetection = (width, height) => {
-    return [
-      { x: width * 0.3, y: height * 0.3, width: width * 0.2, height: height * 0.4 },
-      { x: width * 0.5, y: height * 0.5, width: width * 0.2, height: height * 0.4 },
-    ];
-  };
+      // Étape 6 : Compter les points dans chaque domino
+      let totalPips = 0;
+      for (const { minY, maxY, minX, maxX } of dominoRegions) {
+        const visitedPips = Array.from({ length: newH }, () => Array(newW).fill(false));
+        const dfsPip = (y, x) => {
+          const stack = [[y, x]];
+          let size = 0;
+          while (stack.length) {
+            const [cy, cx] = stack.pop();
+            if (
+              cy < minY || cy > maxY || cx < minX || cx > maxX ||
+              visitedPips[cy][cx] || data[cy][cx] === 0
+            ) continue;
+            visitedPips[cy][cx] = true;
+            size++;
+            stack.push([cy + 1, cx], [cy - 1, cx], [cy, cx + 1], [cy, cx - 1]);
+          }
+          return size;
+        };
 
-  const analyzeImage = async (imageUri, width, height) => {
-    try {
-      console.log('Chargement de l\'image:', imageUri);
-      const imageData = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const imageTensor = tf.tidy(() => {
-        const rawImageData = Uint8Array.from(atob(imageData), c => c.charCodeAt(0));
-        const imageTensor = decodeJpeg(rawImageData);
-        return imageTensor.cast('float32');
-      });
-
-
-      const dominoRegions = simulateDominoDetection(width, height);
-      const results = [];
-
-      for (const region of dominoRegions) {
-        const { x, y, width, height } = region;
-        const halfWidth = width / 2;
-
-        const leftHalf = { x, y, width: halfWidth, height };
-        const rightHalf = { x: x + halfWidth, y, width: halfWidth, height };
-
-        const value1 = countPipsInRegion(imageTensor, leftHalf);
-        const value2 = countPipsInRegion(imageTensor, rightHalf);
-
-        results.push({ value1, value2, points: value1 + value2 });
+        let pipCount = 0;
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            if (!visitedPips[y][x] && data[y][x] === 1) {
+              const size = dfsPip(y, x);
+              // Ajuster la plage de taille des points (plus petite pour les points redimensionnés)
+              if (size > 5 && size < 80) {
+                pipCount++;
+              }
+            }
+          }
+        }
+        console.log(`Points détectés dans ce domino : ${pipCount}`);
+        totalPips += pipCount;
       }
 
-      const totalPoints = results.reduce((sum, d) => sum + d.points, 0);
-      tf.dispose([imageTensor]);
-      return { dominos: results, totalPoints };
-    } catch (e) {
-      console.error('Erreur analyse:', e);
-      return { dominos: [], totalPoints: 0 };
+      console.log("Total des points détectés :", totalPips);
+
+      // Étape 7 : Nettoyer les tenseurs
+      tf.dispose([imageTensor, gray, binary]);
+      return totalPips;
+    } catch (error) {
+      console.error("Erreur analyse image:", error);
+      return 0;
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCapture = async () => {
     if (!hasPermission) {
-      Alert.alert('Erreur', 'Permission de la caméra non accordée');
+      Alert.alert('Erreur', 'Permission caméra non accordée');
       return;
     }
-
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
         allowsEditing: false,
       });
-
-      if (result.canceled) {
-        console.log('Capture annulée');
-        return;
-      }
-
-      const { uri, width, height } = result.assets[0];
-      console.log('Image capturée:', { uri, width, height });
-      const { dominos, totalPoints } = await analyzeImage(uri, width, height);
-
-      Alert.alert(
-        'Résultat',
-        `Dominos détectés : ${dominos.length}\nTotal des points : ${totalPoints}\n` +
-          dominos.map((d, i) => `Domino ${i + 1} : ${d.value1} | ${d.value2}`).join('\n'),
-        [{ text: 'OK' }]
-      );
+      if (result.canceled) return;
+      const { uri } = result.assets[0];
+      setLoading(true);
+      const totalPoints = await analyzeImage(uri);
+      Alert.alert('Résultat', `Nombre total de points détectés : ${totalPoints}`);
     } catch (e) {
-      console.error('Erreur capture:', e);
-      Alert.alert('Erreur', 'Impossible de capturer ou d\'analyser la photo');
+      console.error('Erreur capture/analyse :', e);
+      Alert.alert('Erreur', 'Impossible de capturer ou d’analyser la photo');
+      setLoading(false);
     }
   };
 
@@ -173,17 +179,30 @@ const Sidebar = ({ isOpen, onClose, onNavigate }) => {
     { title: 'Tableau de bord', screen: 'Dashboard', icon: 'dashboard' },
     { title: 'Calculator', screen: 'Calculator', icon: 'calculate' },
     { title: 'Selection', screen: 'Selection', icon: 'group' },
-    { title: 'Caméra Dominos', action: handleCapture, icon: 'casino' },
+    { title: 'Caméra Domino', action: handleCapture, icon: 'casino' },
+    { title: 'Mise en ligne', action: () => handleUploadWithConfirmation(setLoading), icon: 'cloud-upload' },
   ];
 
   if (!isOpen) return null;
 
   return (
     <View style={styles.container}>
+      {loading && (
+        <View
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            zIndex: 10,
+            transform: [{ translateX: -25 }, { translateY: -25 }],
+          }}
+        >
+          <ActivityIndicator size="large" color="#0000ff" />
+        </View>
+      )}
       <TouchableOpacity onPress={onClose} style={styles.closeButton}>
         <Icon name="close" size={24} color="#333" />
       </TouchableOpacity>
-
       <View style={styles.menuContainer}>
         {menuItems.map((item) => (
           <TouchableOpacity
