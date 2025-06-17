@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import styles from '../../assets/styles/calculator';
 
 export default function CalculatorScreen() {
   const [input, setInput] = useState('');
   
-  // Fonction pour gérer les pressions sur les boutons
   const handleButtonPress = (value) => {
     setInput((prevInput) => prevInput + value);
   };
 
-  // Fonction pour évaluer le calcul
+
   const handleEvaluate = () => {
     try {
       setInput(eval(input).toString());
@@ -18,7 +18,6 @@ export default function CalculatorScreen() {
     }
   };
 
-  // Fonction pour réinitialiser l'input
   const handleClear = () => {
     setInput('');
   };
@@ -101,51 +100,4 @@ export default function CalculatorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5', // Utilisation d'un fond léger et discret
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  screen: {
-    width: '100%',
-    marginBottom: 20,
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    elevation: 3,
-  },
-  input: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    textAlign: 'right',
-    color: '#333',
-  },
-  buttonsContainer: {
-    width: '100%',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  button: {
-    width: '22%',
-    height: 70,
-    backgroundColor: '#2196F3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
-    elevation: 3,
-  },
-  buttonText: {
-    fontSize: 24,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  clearButton: {
-    backgroundColor: '#f44336',
-  },
-});
+

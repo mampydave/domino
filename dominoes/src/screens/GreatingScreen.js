@@ -1,15 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, TouchableWithoutFeedback, StyleSheet } from 'react-native';
 import LottieView from 'lottie-react-native';
+import styles from '../../assets/styles/greating';
 
 export default function GreatingScreen({ navigation }) {
   const animationRef = useRef(null);
   
-  // États pour l'animation
+
   const [animation, setAnimation] = useState(require('../../assets/anims/boy-animation.json'));
   const [speed, setSpeed] = useState(1);
   
-  // Configuration des actions possibles
+
   const animationActions = [
     {
       name: 'normal',
@@ -33,7 +34,7 @@ export default function GreatingScreen({ navigation }) {
     // }
   ];
 
-  // Gestion du clic aléatoire
+
   const handleRandomAction = () => {
     const randomIndex = Math.floor(Math.random() * animationActions.length);
     const randomAction = animationActions[randomIndex];
@@ -46,7 +47,6 @@ export default function GreatingScreen({ navigation }) {
   return (
     <TouchableWithoutFeedback onPress={handleRandomAction}>
       <View style={styles.container}>
-        {/* Animation Lottie */}
         <LottieView
           ref={animationRef}
           source={animation}
@@ -69,33 +69,3 @@ export default function GreatingScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  animation: {
-    width: 250,
-    height: 250,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginVertical: 20,
-    color: '#333',
-  },
-  button: {
-    backgroundColor: '#000',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-});
